@@ -22,7 +22,7 @@ class OrderConfirmationMailer
         }
 
         try {
-            $email = (new MailtrapEmail())
+            $email = (new MailtrapEmail)
                 ->from(new Address(
                     config('mail.from.address'),
                     config('mail.from.name'),
@@ -37,7 +37,9 @@ class OrderConfirmationMailer
                 ]);
 
             MailtrapClient::initSendingEmails(
-                apiKey: config('services.mailtrap.apiKey'),
+                apiKey: config('services.mailtrap.api_key'),
+                isSandbox: (bool) config('services.mailtrap.sandbox'),
+                inboxId: config('services.mailtrap.inbox_id'),
             )->send($email);
 
             Log::info('Order confirmation email sent', [

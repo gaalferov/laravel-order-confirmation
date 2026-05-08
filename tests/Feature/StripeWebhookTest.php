@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Services\OrderConfirmationMailer;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Stripe\ApiRequestor;
+use Stripe\Exception\ApiConnectionException;
 use Stripe\HttpClient\ClientInterface;
 use Tests\TestCase;
 
@@ -24,7 +26,7 @@ class StripeWebhookTest extends TestCase
     {
         $secret ??= $this->webhookSecret;
         $timestamp ??= time();
-        $signedPayload = $timestamp . '.' . $payload;
+        $signedPayload = $timestamp.'.'.$payload;
         $signature = hash_hmac('sha256', $signedPayload, $secret);
 
         return "t={$timestamp},v1={$signature}";
@@ -141,10 +143,10 @@ class StripeWebhookTest extends TestCase
             [$lineItemsResponse, 200, []],
         );
 
-        \Stripe\ApiRequestor::setHttpClient($mockClient);
+        ApiRequestor::setHttpClient($mockClient);
     }
 
-    // ─── Signature verification ───
+    // Signature verification
 
     public function test_missing_signature_returns_400(): void
     {
@@ -200,7 +202,7 @@ class StripeWebhookTest extends TestCase
         $response->assertJson(['status' => 'ok']);
     }
 
-    // ─── Duplicate handling ───
+    // Duplicate handling
 
     public function test_duplicate_event_returns_already_processed(): void
     {
@@ -235,7 +237,7 @@ class StripeWebhookTest extends TestCase
         $this->assertTrue(Cache::has("stripe_event_{$eventId}"));
     }
 
-    // ─── Non-checkout events ───
+    // Non-checkout events
 
     public function test_non_checkout_event_does_not_trigger_email(): void
     {
@@ -253,7 +255,7 @@ class StripeWebhookTest extends TestCase
         $response->assertStatus(200);
     }
 
-    // ─── Checkout session completed ───
+    // Checkout session completed
 
     public function test_checkout_session_triggers_order_confirmation_email(): void
     {
@@ -304,13 +306,15 @@ class StripeWebhookTest extends TestCase
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
 
-        // Returns 500 so Stripe retries — email should not be lost
+        // Returns 500 so Stripe will retry, but the marker is already set
+        // (set-before-process semantics: a duplicate billed-order email is worse
+        // than a missed one - admin replays manually if needed).
         $response->assertStatus(500);
         $response->assertJson(['error' => 'Processing failed']);
-        $this->assertFalse(Cache::has("stripe_event_{$eventId}"));
+        $this->assertTrue(Cache::has("stripe_event_{$eventId}"));
     }
 
-    // ─── Missing template UUID ───
+    // Missing template UUID
 
     public function test_missing_template_uuid_skips_email_gracefully(): void
     {
@@ -318,7 +322,7 @@ class StripeWebhookTest extends TestCase
 
         $this->mockStripeSessionRetrieve();
 
-        $mailer = new OrderConfirmationMailer();
+        $mailer = new OrderConfirmationMailer;
         $this->app->instance(OrderConfirmationMailer::class, $mailer);
 
         Log::shouldReceive('warning')
@@ -339,7 +343,7 @@ class StripeWebhookTest extends TestCase
         $response->assertStatus(200);
     }
 
-    // ─── Missing customer email ───
+    // Missing customer email
 
     public function test_missing_customer_email_logs_warning_and_skips(): void
     {
@@ -364,7 +368,7 @@ class StripeWebhookTest extends TestCase
             [$sessionResponse, 200, []],
             [$lineItemsResponse, 200, []],
         );
-        \Stripe\ApiRequestor::setHttpClient($mockClient);
+        ApiRequestor::setHttpClient($mockClient);
 
         $mailer = $this->mock(OrderConfirmationMailer::class);
         $mailer->shouldNotReceive('send');
@@ -380,15 +384,15 @@ class StripeWebhookTest extends TestCase
         $response->assertStatus(200);
     }
 
-    // ─── Stripe API failure ───
+    // Stripe API failure
 
     public function test_stripe_api_failure_returns_500_for_retry(): void
     {
         $mockClient = $this->createMock(ClientInterface::class);
         $mockClient->method('request')->willThrowException(
-            new \Stripe\Exception\ApiConnectionException('Connection to Stripe failed')
+            new ApiConnectionException('Connection to Stripe failed')
         );
-        \Stripe\ApiRequestor::setHttpClient($mockClient);
+        ApiRequestor::setHttpClient($mockClient);
 
         $mailer = $this->mock(OrderConfirmationMailer::class);
         $mailer->shouldNotReceive('send');
@@ -402,13 +406,14 @@ class StripeWebhookTest extends TestCase
             'CONTENT_TYPE' => 'application/json',
         ], $payload);
 
-        // Returns 500 so Stripe retries — event NOT cached
+        // Returns 500 but the event IS already marked - set-before-process
+        // semantics deliberately block automatic retries to avoid double-sending.
         $response->assertStatus(500);
         $response->assertJson(['error' => 'Processing failed']);
-        $this->assertFalse(Cache::has("stripe_event_{$eventId}"));
+        $this->assertTrue(Cache::has("stripe_event_{$eventId}"));
     }
 
-    // ─── Empty line items ───
+    // Empty line items
 
     public function test_checkout_with_empty_line_items_still_sends_email(): void
     {
@@ -431,7 +436,7 @@ class StripeWebhookTest extends TestCase
             [$sessionResponse, 200, []],
             [$lineItemsResponse, 200, []],
         );
-        \Stripe\ApiRequestor::setHttpClient($mockClient);
+        ApiRequestor::setHttpClient($mockClient);
 
         $mailer = $this->mock(OrderConfirmationMailer::class);
         $mailer->shouldReceive('send')

@@ -1,6 +1,6 @@
 # Laravel E-commerce: Order Confirmation Email
 
-A Laravel application that receives Stripe `checkout.session.completed` webhooks and sends order confirmation emails via [Mailtrap](https://mailtrap.io) template API — with signature verification, line item parsing, and duplicate event handling.
+A Laravel application that receives Stripe `checkout.session.completed` webhooks and sends order confirmation emails via [Mailtrap](https://mailtrap.io) template API - with signature verification, line item parsing, and duplicate event handling.
 
 ## How It Works
 
@@ -12,19 +12,19 @@ Stripe Checkout completes
   POST /api/stripe/webhook
         |
         v
-  Verify Stripe signature ── Invalid? → 400 reject
+  Verify Stripe signature -- Invalid? → 400 reject
         |
         v
-  Check for duplicate ── Already processed? → 200 skip
+  Check for duplicate -- Already processed? → 200 skip
         |
         v
-  Retrieve session + line items via allLineItems() ── Failed? → 500 (Stripe retries)
+  Retrieve session + line items via allLineItems() -- Failed? → 500 (Stripe retries)
         |
         v
   Parse order data (items, total, shipping)
         |
         v
-  Send order confirmation email ── Failed? → 500 (Stripe retries)
+  Send order confirmation email -- Failed? → 500 (Stripe retries)
   via Mailtrap template API
   (template_uuid + variables map)
         |
@@ -37,31 +37,29 @@ Stripe Checkout completes
 
 ## Features
 
-- **Stripe Webhook Verification** — Validates webhook signatures using `Stripe\Webhook::constructEvent()` to reject tampered payloads
-- **Order Data Extraction** — Retrieves the Checkout Session and fetches line items via `Session::allLineItems()` to get product names, quantities, and prices
-- **Mailtrap Template API** — Sends emails using Mailtrap's template engine with a variables map (`order_id`, `items`, `total`, `shipping_address`)
-- **Duplicate Handling** — Caches processed event IDs for 24 hours to handle Stripe webhook retries gracefully
-- **Graceful Error Handling** — Mail and Stripe API failures return `500` so Stripe retries delivery; invalid signatures return `400`; duplicate events return `200` and are skipped
+- **Stripe Webhook Verification** - Validates webhook signatures using `Stripe\Webhook::constructEvent()` to reject tampered payloads
+- **Order Data Extraction** - Retrieves the Checkout Session and fetches line items via `Session::allLineItems()` to get product names, quantities, and prices
+- **Mailtrap Template API** - Sends emails using Mailtrap's template engine with a variables map (`order_id`, `items`, `total`, `shipping_address`)
+- **Sandbox or Production** - Toggle between Mailtrap Sandbox (capture for testing) and live sending with two env vars (`MAILTRAP_SANDBOX`, `MAILTRAP_INBOX_ID`)
+- **Atomic Idempotency** - Concurrent webhook retries are deduped via `Cache::add` (atomic check-and-set) so the same event never sends two emails
+- **Rate Limited** - Webhook endpoint throttled per IP to absorb signature-brute attempts
+- **Graceful Error Handling** - Mail and Stripe API failures return `500` so Stripe retries delivery; invalid signatures return `400`; duplicate events return `200` and are skipped
 
 ## Prerequisites
 
 - PHP 8.3+
 - [Composer](https://getcomposer.org/)
 - [Mailtrap account](https://mailtrap.io) with a verified sending domain and an email template
-- [Stripe account](https://dashboard.stripe.com) in test mode (or Sandbox — Stripe's newer UI calls it "Sandbox" but it is equivalent to test mode)
+- [Stripe account](https://dashboard.stripe.com) in test mode
 - [Stripe CLI](https://stripe.com/docs/stripe-cli) for local webhook forwarding
 
 ## Setup
 
 1. **Clone and install**
 
-This project lives inside the `mailtrap/examples` monorepo. Use sparse checkout to get only this subdirectory:
-
 ```bash
-git clone --depth=1 --filter=blob:none --sparse https://github.com/mailtrap/examples.git
-cd examples
-git sparse-checkout set php/laravel-order-confirmation
-cd php/laravel-order-confirmation
+git clone https://github.com/gaalferov/laravel-order-confirmation.git
+cd laravel-order-confirmation
 composer install
 ```
 
@@ -75,18 +73,18 @@ php artisan key:generate
 3. **Set your API keys** in `.env`
 
 ```
-# Mailtrap — find API key at mailtrap.io → API Keys
+# Mailtrap - find API key at mailtrap.io → API Keys
 MAILTRAP_API_KEY=your_mailtrap_api_key
-# Mailtrap — template UUID (not the numeric ID) from Email Templates → edit template → UUID field
+# Mailtrap - template UUID (not the numeric ID) from Email Templates → edit template → UUID field
 MAILTRAP_TEMPLATE_UUID=your_order_confirmation_template_uuid
 # Your verified sending domain in Mailtrap
 MAIL_FROM_ADDRESS=orders@yourdomain.com
 # Fallback recipient when Stripe session has no customer email (useful for testing)
 MAIL_ORDER_RECIPIENT=your@email.com
 
-# Stripe — find secret key at Stripe Dashboard → Settings → Developers → Manage API keys
+# Stripe - find secret key at Stripe Dashboard → Settings → Developers → Manage API keys
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
-# Stripe — generated by running `stripe listen` (see Stripe Test Mode Setup below, step 3)
+# Stripe - generated by running `stripe listen` (see Stripe Test Mode Setup below, step 3)
 STRIPE_WEBHOOK_SECRET=whsec_your_webhook_signing_secret
 ```
 
@@ -106,7 +104,7 @@ In the [Stripe Dashboard](https://dashboard.stripe.com/test/products) (test mode
 
 1. Go to **Products** > **Add product**
 2. Set a name (e.g., "Widget Pro") and price (e.g., $19.99)
-3. Save — Stripe creates a Product and a Price automatically
+3. Save - Stripe creates a Product and a Price automatically
 
 ### 2. Install and configure Stripe CLI
 
@@ -134,7 +132,7 @@ In a separate terminal:
 stripe trigger checkout.session.completed
 ```
 
-> **Note:** `stripe trigger` sends a synthetic event with a fixed customer email (`stripe@example.com`) and real line items from the test fixture. To receive the email at your own address, set `MAIL_ORDER_RECIPIENT` in `.env` — this is used as a fallback when the Stripe session has no real customer email.
+> **Note:** `stripe trigger` sends a synthetic event with a fixed customer email (`stripe@example.com`) and real line items from the test fixture. To receive the email at your own address, set `MAIL_ORDER_RECIPIENT` in `.env` - this is used as a fallback when the Stripe session has no real customer email.
 
 **For a full end-to-end test with real customer email, items, and shipping:**
 
@@ -170,11 +168,12 @@ app/
   Services/
     OrderConfirmationMailer.php    # Sends email via Mailtrap template API
 config/
-  mail.php                         # Mailtrap mailer config
+  mail.php                         # Sender address/name only (Mail facade is not used)
+  services.php                     # Mailtrap API key, host, sandbox flags
   stripe.php                       # Stripe API keys
-  order.php                        # Template UUID and recipient config
+  order.php                        # Template UUID and recipient fallback
 routes/
-  api.php                          # POST /api/stripe/webhook
+  api.php                          # POST /api/stripe/webhook (rate-limited)
 tests/Feature/
   StripeWebhookTest.php            # Signature, dedup, and flow tests
 ```
@@ -212,33 +211,37 @@ $email = (new MailtrapEmail())
     ]);
 
 MailtrapClient::initSendingEmails(
-    apiKey: config('services.mailtrap.apiKey'),
+    apiKey: config('services.mailtrap.api_key'),
+    isSandbox: (bool) config('services.mailtrap.sandbox'),
+    inboxId: config('services.mailtrap.inbox_id'),
 )->send($email);
 ```
 
+Set `MAILTRAP_SANDBOX=true` plus `MAILTRAP_INBOX_ID=<id>` in `.env` to capture mail in a sandbox inbox during local testing instead of sending real email.
+
 ### Duplicate Event Handling
 
-Stripe may retry webhook delivery. The controller caches each processed event ID for 24 hours:
+Stripe may retry webhook delivery. The controller uses an atomic `Cache::add` to set the processed marker before processing. Concurrent retries see a populated key and skip:
 
 ```php
 $cacheKey = 'stripe_event_' . $event->id;
 
-if (Cache::has($cacheKey)) {
+if (! Cache::add($cacheKey, true, now()->addHours(24))) {
     return response()->json(['status' => 'already processed']);
 }
 
 // ... process event ...
-
-Cache::put($cacheKey, true, now()->addHours(24));
 ```
+
+The marker is set BEFORE processing. The trade-off: a failed processing run will not be retried automatically, since the marker stays for 24 hours. This is the safer default for transactional confirmations - a duplicate billed-order email is worse than a missed one (which is recoverable via manual replay).
 
 ### Error Handling
 
-- **Invalid signature** — returns `400`, logged as warning
-- **Duplicate event** — returns `200` with `"already processed"` status
-- **Stripe API failure** — logged, returns `500` so Stripe retries the event
-- **Mail delivery failure** — logged, returns `500` so Stripe retries the event
-- **Successful processing** — event ID cached for 24h, returns `200`
+- **Invalid signature** - returns `400`, logged as warning
+- **Duplicate event** - returns `200` with `"already processed"` status
+- **Stripe API failure** - logged, returns `500` so Stripe retries the event
+- **Mail delivery failure** - logged, returns `500` so Stripe retries the event
+- **Successful processing** - event ID cached for 24h, returns `200`
 
 ## Running Tests
 
@@ -246,7 +249,7 @@ Cache::put($cacheKey, true, now()->addHours(24));
 ./vendor/bin/phpunit
 ```
 
-Tests cover signature verification, duplicate handling, payload parsing, and graceful error handling — all without requiring real Stripe or Mailtrap credentials.
+Tests cover signature verification, duplicate handling, payload parsing, and graceful error handling - all without requiring real Stripe or Mailtrap credentials.
 
 ## Links
 

@@ -1,6 +1,9 @@
 /vendor/
 /node_modules/
 .env
+.env.backup
+.DS_Store
+*.log
 .phpunit.result.cache
 /.phpunit.cache
 Homestead.json
@@ -9,6 +12,15 @@ npm-debug.log
 yarn-error.log
 /.idea
 /.vscode
+/.playwright-mcp
 /storage/*.key
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitkeep
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitkeep
+/storage/framework/views/*
+!/storage/framework/views/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
 /bootstrap/cache/*
 !/bootstrap/cache/.gitkeep
